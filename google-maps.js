@@ -17,7 +17,7 @@
          url: "living.kmz",
          icon: "<i class='fa fa-star' aria-hidden='true'></i>"
 
-     }, 
+     },
      b: {
          name: "Dining",
          url: "dining.kmz",
@@ -64,65 +64,25 @@
      map = new google.maps.Map(document.getElementById("map_canvas"), options);
 
 
-     var request = {
-         location: latlng,
-         radius: '500',
-         // keyword: "Michelle Vale"
-     };
 
-     /* Marker and window */
-
-     infowindow = new google.maps.InfoWindow();
-     marker = new google.maps.Marker({
-         map: map
+     infowindow = new google.maps.InfoWindow({
+         maxWidth: 200
      });
-
-     infowindow = new google.maps.InfoWindow();
-    var service = new google.maps.places.PlacesService(map);
-    service.search(request, callback);
+     service = new google.maps.places.PlacesService(map);
 
      createTogglers();
      startup();
 
  };
 
- function callback(results, status) {
-     if (status == google.maps.places.PlacesServiceStatus.OK) {
-         for (var i = 0; i < results.length; i++) {
-             var place = results[i];
-             createMarker(results[i]);
-         }
-     }
- }
-
- function createMarker(place) {
-     var placeLoc = place.geometry.location;
-     var marker = new google.maps.Marker({
-         map: map,
-         position: place.geometry.location
-     });
-
-     google.maps.event.addListener(marker, 'click', function() {
-         infowindow.setContent(place.name + place.rating + place.vicinity +
-             place.formatted_address + place.website);
-         infowindow.open(map, this);
-     });
- }
-
- function openInfoWindow(id) {
-     return true;
- }
-
 
  function addKmlLayer(src, map) {
      var ctaLayer = new google.maps.KmlLayer({
          url: baseurl + src,
-         suppressInfoWindows: false,
+         suppressInfoWindows: true,
 
      });
      ctaLayer.setMap(map);
-
-     console.log(baseurl + src);
  }
 
 
@@ -133,17 +93,29 @@
 
          var layer = new google.maps.KmlLayer(baseurl + kml[id].url, {
              preserveViewport: true,
-             suppressInfoWindows: false
+             suppressInfoWindows: true
          });
+         infowindow.close(map);
          // store kml as obj
          kml[id].obj = layer;
          kml[id].obj.setMap(map);
 
-          google.maps.event.addListener(layer, 'click', function(event) {
-                var content = event.featureData.infoWindowHtml;
-                /* Think I need to get the placeID / detail here */
-          
-        });
+         layer.addListener('click', function(kmlEvent) {
+
+             var request = {
+                 location: kmlEvent.latLng,
+                 radius: '10',
+                 name: kmlEvent.featureData.name
+             };
+             service.nearbySearch(request, getIDcallback);
+
+         });
+
+         layer.addListener('ontouchend', function() {
+             google.maps.event.trigger(this, 'click');
+             // alert(0)
+         });
+
      } else {
          kml[id].obj.setMap(null);
          delete kml[id].obj;
@@ -152,33 +124,68 @@
 
  };
 
- 
- // marker.addListener('click', function() {
+ function getIDcallback(results, status) {
 
- //     marker.setPlace({
- //         placeId: place.place_id,
- //         location: place.geometry.location
- //     });
- //     marker.setVisible(true);
+     if (status == google.maps.places.PlacesServiceStatus.OK) {
+         var place = results[0];
+         // console.log(place.place_id);
 
- //     infowindow.setContent('<div><strong>' + place.name + '</strong><br>' +
- //         'Place ID: ' + place.place_id + '<br>' +
- //         place.formatted_address);
- //     infowindow.open(map, marker);
+         var requestplace = {
+             placeId: place.place_id
+         };
 
+         service.getDetails(requestplace, getPlacesDestailscallback);
 
+     }
+ }
 
- // });
+ function getPlacesDestailscallback(results, status) {
 
-
-
-
-
- // infowindow.setContent('<span style="padding: 0px; text-align:left" align="left"><h5>' + place.name + '&nbsp; &nbsp; ' + place.rating + '</h5><p>' + place.formatted_address + '<br />' + place.formatted_phone_number + '<br />' +
- //     '<a  target="_blank" href=' + place.website + '>' + place.website + '</a></p>');
+     if (status == google.maps.places.PlacesServiceStatus.OK) {
+         var place = results;
+         // console.log(results);
 
 
- 
+         var address = results.adr_address;
+         // var new_address = address.replace('/span/g', '<br/><span');
+
+         var content = '<span style="padding: 0px; text-align:left" align="left"><h6>' + place.name + '</h6>';
+
+         content += address;
+
+         content += ((results.international_phone_number)) ? '<div>' + results.international_phone_number + '</div>' : '';
+
+
+         content += ((results.website)) ? '<a  target="_blank" href=' + place.website + '>' + place.website + '</a>' : '';
+
+         content += '</span>';
+         infowindow.setContent(content);
+         infowindow.setPosition(place.geometry.location);
+         infowindow.open(map);
+     }
+ }
+
+
+
+ // create the controls dynamically because it's easier, really
+ function createTogglers() {
+
+     var html = "<form><ul>";
+     html += "<li class='control selected'><a href='#' onclick='removeAll(); addAll();return false;'>" +
+         "ALL<\/a><\/li>";
+     for (var prop in kml) {
+
+         html += "<li id=\"selector-" + prop + "\"><a id='" + prop + "'" +
+             "title='" + kml[prop].name + "' " +
+             " href='javascript:void(0)' onClick='removeAll(); highlight(this,\"selector-" + prop + "\"); toggleKML(\"checked\", this.id)\' \/>" +
+             kml[prop].icon +
+             "<span>" + kml[prop].name + "</span>" +
+             "<\/li>";
+     }
+     html += "<\/ul><\/form>";
+
+     document.getElementById("toggle_box").innerHTML = html;
+ };
 
  // easy way to remove all objects
  function removeAll() {
@@ -188,8 +195,6 @@
                  kml[prop].obj.setMap(null);
                  delete kml[prop].obj;
              }
-
-             // console.log(prop)
          }
 
      }
@@ -201,7 +206,6 @@
          console.log(prop)
      }
 
-     // setHome();
  };
 
 
@@ -215,13 +219,29 @@
 
 
  function startup() {
-     // for example, this toggles kml b on load and updates the menu selector
-     // var checkit = document.getElementById('home');
-     // checkit.checked = true;
      addAll();
-     // highlight(checkit, 'selector1');
 
  }
 
 
+ $(window).on('load', function() {
 
+     setMapHeight(true);
+ })
+
+ $(window).on('resize', function() {
+     setMapHeight();
+ })
+
+ function setMapHeight(isLoaded) {
+     /* set height of map based on toggle button container */
+     if ($(window).width() < 844) {
+         buttonHeight = $('#toggle_box').height();
+         $('#map_canvas').css('padding-bottom', buttonHeight);
+     }
+     if (isLoaded) {
+         $('#map_container').addClass('fade-in');
+     }
+
+
+ }
